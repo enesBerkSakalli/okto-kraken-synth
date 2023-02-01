@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+    .links line {
+        stroke: #999;
+        stroke-opacity: 0.6;
+    }
+
+    .nodes circle {
+        stroke: #fff;
+        stroke-width: 1.5px;
+    }
+
+    .sequencer {
+        border-radius: 5px;
+        width: fit-content;
+        display: grid;
+        grid-template-rows: repeat(6, 1fr);
+        grid-template-columns: fit-content;
+        margin: auto;
+      }
+      
+      .note {
+        border-radius: 5px;
+        height: 4em;
+        width: 4em;
+        border-style: solid;
+        border-width: 1px;
+        border-color: lightgray;
+        margin: 2px;
+        outline: none;
+      }
+      
+      .sequencer-row {
+        display: inline-block;
+        white-space: nowrap;
+      }
+      
+      .note-is-active {
+        background-color: green;
+        border: 1px solid black;
+      }
+      
+      .note-not-active {
+        background-color: solid grey;
+      }
+      
+      .toggle-play {
+        display: flex;
+      }
+      
+      .play-button {
+        margin: auto;
+      }
+
+</style>
+
+
+<body>
+    <div>
+        <div>
+            Graph Synth Octave
+        </div>
+        <input id="graph-synth-octave" type="range" id="volume" name="volume" min="0" max="4">
+    </div>
+    <svg width="1600" height="400"></svg>
+
+    <div id="sequencer" class="container sequencer">
+    </div>
+    <div class="toggle-play">
+        <button id="play-button" class="play-button">Play</button>
+    </div>
+
+</body>
+<script src="https://d3js.org/d3.v4.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.43/Tone.js"></script>
+
+
+
+<script type="module">
+    import classNames from "https://cdn.skypack.dev/classnames/bind";
+
+    let beat = 0;
+    // Similarly, the grid would be stored in the component's state
+    // Here I am leaving it as a global variable for demonstration purposes.
+
+    const grid = makeGrid()
+
+
+    function createSynthGraph() {
+
+        const synth = new Tone.PolySynth(Tone.MonoSynth, {
+                volume: -6,
+                oscillator: {
+                    type: "sine2"
+                },
+                envelope: {
+                    attack: 0.05,
+                    decay: 0.3,
+                    sustain: 1,
+                    release: 1,
+                },
+                filterEnvelope: {
+                    attack: 0.001,
+                    decay: 0.7,
+                    sustain: 0.1,
+                    release: 1,
+                    baseFrequency: 300,
+                    octaves: 4
+                }
+            })
+            .toDestination();
+
+
+        //create a synth and connect it to the main output (your speakers)
+        var svg = d3.select("svg"),
+            width = +svg.attr("width"),
+            height = +svg.attr("height");
+
+        var color = d3.scaleOrdinal(d3.schemeCategory20);
+
+        var simulation = d3.forceSimulation()
+            .force("link", d3.forceLink()
+                .id(function (d) {
+                    return d.id;
+                }))
+            .force("charge", d3.forceManyBody())
+            .force("center", d3.forceCenter(width / 2, height / 2));
+
+        d3.json("graph.json", function (error, graph) {
+            if (error) throw error;
+
+            var link = svg.append("g")
+                .attr("class", "links")
+                .selectAll("line")
+                .data(graph.links)
+                .enter().append("line")
+                .attr("stroke-width", function (d) {
+                    return Math.sqrt(d.value);
+                });
+
+            var node = svg.append("g")
+                .attr("class", "nodes")
+                .selectAll("g")
+                .data(graph.nodes)
+                .enter().append("g")
+
+            var circles = node.append("circle")
+                .attr("r", 20)
+                .attr("fill", function (d) {
+                    return color(d.group);
+                })
+                .on('click', (d) => {
+                    let octave_highness = document.getElementById('graph-synth-octave').value
+                    synth.triggerAttackRelease(`${d.id}${octave_highness}`, '8n')
+                });
+
+            // Create a drag handler and append it to the node object instead
+            var drag_handler = d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended)
+
+            drag_handler(node);
+
+            var lables = node.append("text")
+                .text(function (d) {
+                    return d.id;
+                })
+                .attr('font-weight', 'bold')
+                .attr('x', -10)
+                .attr('y', 0);
+
+            node.append("title")
+                .text(function (d) {
+                    return d.id;
+                });
+
+            simulation
+                .nodes(graph.nodes)
+                .on("tick", ticked);
+
+            simulation.force("link")
+                .links(graph.links);
+
+            function ticked() {
+                link
+                    .attr("x1", function (d) {
+                        return d.source.x;
+                    })
+                    .attr("y1", function (d) {
+                        return d.source.y;
+                    })
+                    .attr("x2", function (d) {
+                        return d.target.x;
+                    })
+                    .attr("y2", function (d) {
+                        return d.target.y;
+                    });
+
+                node
+                    .attr("transform", function (d) {
+                        return "translate(" + d.x + "," + d.y + ")";
+                    })
+            }
+        });
+
+        function dragstarted(d) {
+            if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(d) {
+            d.fx = d3.event.x;
+            d.fy = d3.event.y;
+        }
+
+        function dragended(d) {
+            if (!d3.event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+    }
+
+    function makeSynths(count) {
+
+        // each synth can only play one note at a time.
+        // for simplicity, we'll create one synth for each note available
+        // this allows for easy polyphony (multiple notes playing at the same time)
+
+        // Documentation for Tone.Synth can be found here:
+        // https://tonejs.github.io/docs/r13/Synth
+        //
+        // Demo different oscillator settings here:
+        // https://tonejs.github.io/examples/oscillator
+
+        const synths = [];
+
+        for (let i = 0; i < count; i++) {
+            // I'm using an oscillator with a square wave and 8 partials
+            // because I like how it sounds.
+            //
+            // You could simply write new Tone.Synth().toDestination() instead.
+            // This would work just as well, but sound slightly different.
+            //
+            // Demo different oscillator settings here:
+            // https://tonejs.github.io/examples/oscillator
+
+            let synth = new Tone.Synth({
+                oscillator: {
+                    type: "square8"
+                }
+            }).toDestination();
+            synths.push(synth);
+        }
+
+        return synths;
+    };
+
+    // an array of notes is passed in as the argument to allow for flexbility.
+    function makeGrid(notes = ["F4", "Eb4", "C4", "Bb3", "Ab3", "F3"]) {
+        // our "notation" will consist of an array with 6 sub arrays
+        // each sub array corresponds to one row of our sequencer
+        // declare the parent array to hold each row subarray
+        const rows = [];
+
+        for (const note of notes) {
+            // declare the subarray
+            const row = [];
+            // each subarray contains multiple objects that have an assigned note
+            // and a boolean to flag whether they are active.
+            // each element in the subarray corresponds to one eighth note.
+            for (let i = 0; i < 8; i++) {
+                row.push({
+                    note: note,
+                    isActive: false
+                });
+            }
+            rows.push(row);
+        }
+
+        // we now have 6 rows each containing 8 eighth notes
+        return rows;
+    };
+
+    function configLoop() {
+        // This is our callback function. It will execute repeatedly 
+        const repeat = (time) => {
+
+            grid.forEach((row, index) => {
+                // as the index increments we are moving *down* the rows
+                // One note per row and one synth per note means that each row corresponds to a synth
+                let synth = synths[index];
+                // beat is used to keep track of what subdivision we are on
+                // there are eight *beats* or subdivisions for this sequencer
+                let note = row[beat];
+
+                if (note.isActive) {
+                    // triggerAttackRelease() plays a specific pitch for a specific duration
+                    // documentation can be found here:
+                    // https://tonejs.github.io/docs/14.7.77/Synth#triggerAttackRelease
+
+                    synth.triggerAttackRelease(note.note, "8n", time);
+                }
+            });
+            // increment the counter
+            beat = (beat + 1) % 8;
+        };
+
+        // set the tempo in beats per minute.
+        Tone.Transport.bpm.value = 120;
+        // telling the transport to execute our callback function every eight note.
+        Tone.Transport.scheduleRepeat(repeat, "8n");
+    }
+
+    function makeSequencer() {
+        // grab the top level div from the DOM
+        const sequencer = document.getElementById("sequencer");
+
+        // iterate through the grid
+        grid.forEach((row, rowIndex) => {
+
+            // create a parent div for each row
+            const seqRow = document.createElement("div");
+            seqRow.id = `rowIndex`;
+            seqRow.className = "sequencer-row";
+
+            // iterate through each note in the row
+            row.forEach((note, noteIndex) => {
+
+                // create a button for each note
+                const button = document.createElement("button");
+                button.className = "note"
+
+                // handleNoteClick() to be defined in a little bit
+                button.addEventListener("click", function (e) {
+                    handleNoteClick(rowIndex, noteIndex, e);
+                });
+
+                // append each note to the parent div
+                seqRow.appendChild(button);
+            });
+            // append each row to the top level div
+            sequencer.appendChild(seqRow);
+        });
+    };
+
+    function handleNoteClick(clickedRowIndex, clickedNoteIndex, e) {
+        // iterating through the grid
+        grid.forEach((row, rowIndex) => {
+            // iterate through each note in current row
+            row.forEach((note, noteIndex) => {
+                // toggle the note in the grid that corresponds to the clicked button.
+                if (clickedRowIndex === rowIndex && clickedNoteIndex === noteIndex) {
+                    note.isActive = !note.isActive;
+
+                    // I'm using the classNames utility to make changing the button styling easier.
+                    // https://www.npmjs.com/package/classnames
+                    e.target.className = classNames(
+                        "note", {
+                            "note-is-active": !!note.isActive
+                        }, {
+                            "note-not-active": !note.isActive
+                        }
+                    );
+                }
+            });
+        });
+    };
+
+    const configPlayButton = () => {
+        // grab the button from the DOM
+        const button = document.getElementById("play-button");
+        
+        button.addEventListener("click", (e) => {
+          if (!started) {
+            // Only exectued the first time the button is clicked
+            // initializing Tone, setting the volume, and setting up the loop
+            
+            Tone.start();
+            Tone.getDestination().volume.rampTo(-10, 0.001)
+            configLoop();
+            started = true;
+          }
+      
+          // toggle Tone.Trasport and the flag variable.
+          if (playing) {
+            e.target.innerText = "Play";
+            Tone.Transport.stop();
+            playing = false;
+          } else {
+            e.target.innerText = "Stop";
+            Tone.Transport.start();
+            playing = true;
+          }
+        });
+      };
+
+    function main() {
+        createSynthGraph()
+        configPlayButton();
+    	makeSequencer();
+    }
+
+
+    const synths = makeSynths(6);
+    const notes = ["F4", "Eb4", "C4", "Bb3", "Ab3", "F3"];
+    let playing = false;
+    let started = false;
+
+  window.addEventListener("DOMContentLoaded", () => {
+        main()
+  });
+
+
+</script>
