@@ -1,0 +1,30 @@
+{
+    "nodes": [
+      {"id": "C", "group": 1},
+      {"id": "D", "group": 2},
+      {"id": "E", "group": 3},
+      {"id": "F", "group": 4},
+      {"id": "G", "group": 5},
+      {"id": "A", "group": 6},
+      {"id": "B", "group": 7},
+      {"id": "C#", "group": 8},
+      {"id": "D#", "group": 9},
+      {"id": "F#", "group": 10},
+      {"id": "G#", "group": 11},
+      {"id": "A#", "group": 12}
+    ],
+    "links": [
+      {"source": "C", "target": "G", "value": 15},
+      {"source": "G", "target": "D", "value": 15},
+      {"source": "D", "target": "A", "value": 15},
+      {"source": "A", "target": "E", "value": 15},
+      {"source": "E", "target": "B", "value": 15},
+      {"source": "B", "target": "F#", "value": 15},
+      {"source": "F#", "target": "C#", "value": 15},
+      {"source": "C#", "target": "G#", "value": 15},
+      {"source": "G#", "target": "D#", "value": 15},
+      {"source": "D#", "target": "A#", "value": 15},
+      {"source": "A#", "target": "F", "value": 15},
+      {"source": "F", "target": "C", "value": 15}  
+    ]
+  }
